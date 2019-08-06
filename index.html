@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>matterjs Transformable Wheel Demo</title>
+    <script src="matter.js"></script>
+
+<body>
+
+    <script>
+
+        // Configurable parameters
+        var sceneWidth = 800,
+            sceneHeight = 400,
+            wallThickness = 10,
+            wheelRadius = 32,
+            wheelLegWidth = 5,
+            debugRender = false;
+
+        // Derived parameters
+        var sceneCenter = sceneWidth / 2,
+            sceneMiddle = sceneHeight / 2,
+            wheelVertical = sceneHeight - wheelRadius * 2;
+
+        var engine = Matter.Engine.create();
+
+        var renderer = Matter.Render.create({
+            element: document.body,
+            engine: engine,
+            options: {
+                width: sceneWidth,
+                height: sceneHeight,
+                showAngleIndicator: debugRender,
+                showCollisions: debugRender,
+                wireframes: debugRender,
+            }
+        });
+
+        // Create walls
+        // Matter.Bodies.rectangle(x, y, width, height, [options])
+        var wallOptions = { isStatic: true };
+        Matter.World.add(engine.world, [
+            // Left
+            Matter.Bodies.rectangle(0, sceneMiddle, wallThickness, sceneHeight, wallOptions),
+            // Right
+            Matter.Bodies.rectangle(sceneWidth, sceneMiddle, wallThickness, sceneHeight, wallOptions),
+            // Top
+            Matter.Bodies.rectangle(sceneCenter, 0, sceneWidth, wallThickness, wallOptions),
+            // Bottom
+            Matter.Bodies.rectangle(sceneCenter, sceneHeight, sceneWidth, wallThickness, wallOptions),
+        ]);
+
+        // Create the wheel base
+        // Matter.Bodies.circle(x, y, radius, [options], [maxSides])
+        var wheelBase = Matter.Bodies.circle(sceneCenter, wheelVertical, wheelRadius,
+            { collisionFilter: { group: -1 } });
+
+        // Create the wheel leg
+        var wheelLeg = Matter.Bodies.rectangle(sceneCenter, wheelVertical, wheelLegWidth,
+            wheelRadius, { collisionFilter: { group: -1 } });
+
+        var wheel = Matter.Body.create({
+            parts: [wheelBase, wheelLeg]
+        });
+
+        Matter.World.add(engine.world, wheel);
+
+        vSub = Matter.Vector.sub;
+        vMag = Matter.Vector.magnitude;
+
+        Matter.Render.run(renderer);
+        (function run() {
+            window.requestAnimationFrame(run);
+
+            // Distance between base and leg
+            var dist = vMag(vSub(wheelBase.position, wheelLeg.position));
+            if (dist < wheelRadius) {
+                Matter.Body.translate(wheelLeg, { x: 0, y: -0.5 });
+            } else {
+                Matter.Body.setAngularVelocity(wheel, 0.01);
+            }
+
+            Matter.Engine.update(engine, 1000 / 60);
+        })();
+    </script>
