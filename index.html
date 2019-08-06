@@ -10,18 +10,29 @@
 
     <script>
 
+        // leg friction
+        // leg springs
+
         // Configurable parameters
         var sceneWidth = 800,
             sceneHeight = 400,
-            wallThickness = 10,
+            wallThickness = 40,
+
             wheelRadius = 32,
-            wheelLegWidth = 5,
+
+            legThickness = 10,
+            legLength = wheelRadius,
+            legCount = 5,
+            legFriction = 0.1,
+            legRestitution = 0.1,
+
             debugRender = false;
 
         // Derived parameters
         var sceneCenter = sceneWidth / 2,
             sceneMiddle = sceneHeight / 2,
-            wheelVertical = sceneHeight - wheelRadius * 2;
+            wheelYOffset = sceneHeight - wheelRadius * 2,
+            wheelXOffset = sceneCenter;
 
         var engine = Matter.Engine.create();
 
@@ -53,34 +64,71 @@
 
         // Create the wheel base
         // Matter.Bodies.circle(x, y, radius, [options], [maxSides])
-        var wheelBase = Matter.Bodies.circle(sceneCenter, wheelVertical, wheelRadius,
+        var wheelBase = Matter.Bodies.circle(wheelXOffset, wheelYOffset, wheelRadius,
             { collisionFilter: { group: -1 } });
 
-        // Create the wheel leg
-        var wheelLeg = Matter.Bodies.rectangle(sceneCenter, wheelVertical, wheelLegWidth,
-            wheelRadius, { collisionFilter: { group: -1 } });
+        // Create the wheel legs
+        var wheelBodies = [wheelBase];
 
-        var wheel = Matter.Body.create({
-            parts: [wheelBase, wheelLeg]
-        });
+        for (var legIdx = 0; legIdx < legCount; ++legIdx) {
+            var leg = Matter.Bodies.rectangle(wheelXOffset, wheelYOffset, legLength, legThickness, {
+                collisionFilter: { group: -1 },
+                angle: legIdx * 2 * Math.PI / legCount,
+                friction: legFriction,
+                restitution: legRestitution,
+            });
 
+            console.log(leg.angle * 180 / Math.PI);
+
+            wheelBodies.push(leg);
+        }
+
+        var wheel = Matter.Body.create({ parts: wheelBodies });
         Matter.World.add(engine.world, wheel);
 
         vSub = Matter.Vector.sub;
         vMag = Matter.Vector.magnitude;
+        vRot = Matter.Vector.rotate;
+
+        var wheelSpeedMax = 0.1,
+            wheelSpeed = wheelSpeedMax,
+            legExtensionMax = 0.3,
+            legExtensions = Array.from({ length: legCount }, (v, i) => legExtensionMax);
 
         Matter.Render.run(renderer);
         (function run() {
             window.requestAnimationFrame(run);
 
-            // Distance between base and leg
-            var dist = vMag(vSub(wheelBase.position, wheelLeg.position));
-            if (dist < wheelRadius) {
-                Matter.Body.translate(wheelLeg, { x: 0, y: -0.5 });
-            } else {
-                Matter.Body.setAngularVelocity(wheel, 0.01);
+            // Extend and retract the legs (legs start at index 2)
+            for (var legIdx = 2; legIdx < wheelBodies.length; legIdx++) {
+                var leg = wheelBodies[legIdx];
+
+                // Distance between base and leg
+                var extension = vMag(vSub(wheelBase.position, leg.position));
+
+                if (extension > 1.5 * wheelRadius) {
+                    legExtensions[legIdx - 2] = -legExtensionMax;
+                } else if (extension < wheelRadius / 2) {
+                    legExtensions[legIdx - 2] = legExtensionMax;
+                }
+
+                // I'm not sure why the negative angle is needed below.
+                // It has something to do with how matterjs represents angles internally.
+                // They seemed to be left handed
+                var baseAngle = wheel.angle - (-leg.angle);
+                var legOutRotated = vRot({ x: legExtensions[legIdx - 2], y: 0 }, baseAngle);
+                Matter.Body.translate(leg, legOutRotated);
             }
 
+            if (wheel.position.x > sceneWidth - 4 * wheelRadius) {
+                wheelSpeed = -wheelSpeedMax;
+            } else if (wheel.position.x < 4 * wheelRadius) {
+                wheelSpeed = wheelSpeedMax;
+            }
+
+            Matter.Body.setAngularVelocity(wheel, wheelSpeed);
+
+            // Take a look at this later: https://gist.github.com/fabienjuif/a7d9fc3e34e23f6000bcfc185dc0e341
             Matter.Engine.update(engine, 1000 / 60);
         })();
     </script>
